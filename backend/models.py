@@ -1,0 +1,87 @@
+import enum
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Enum, JSON, Table
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from database import Base
+
+class UnitType(str, enum.Enum):
+    INDIVIDUAL = "명"
+    TEAM = "팀"
+
+class RoomStatus(str, enum.Enum):
+    RECRUITING = "RECRUITING"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+# N:M 테이블 (그룹-유저)
+group_members = Table(
+    'group_members', Base.metadata,
+    Column('group_id', Integer, ForeignKey('groups.id'), primary_key=True),
+    Column('user_id', String, ForeignKey('users.id'), primary_key=True)
+)
+
+# N:M 테이블 (유저-역할)
+user_roles = Table(
+    'user_roles', Base.metadata,
+    Column('user_id', String, ForeignKey('users.id'), primary_key=True),
+    Column('role_id', Integer, ForeignKey('roles.id'), primary_key=True)
+)
+
+# N:M 테이블 (방-참가자)
+room_participants = Table(
+    'room_participants', Base.metadata,
+    Column('room_id', Integer, ForeignKey('rooms.id'), primary_key=True),
+    Column('user_id', String, ForeignKey('users.id'), primary_key=True)
+)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)  # G- or D- Prefix
+    email = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    profile_image = Column(String, nullable=True)
+    fcm_token = Column(String, nullable=True)
+    preferred_games = Column(JSON, default=list, nullable=False)
+
+    groups = relationship("Group", secondary=group_members, back_populates="members")
+    roles = relationship("Role", secondary=user_roles, back_populates="users")
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    members = relationship("User", secondary=group_members, back_populates="groups")
+    roles = relationship("Role", back_populates="group", cascade="all, delete-orphan")
+    rooms = relationship("Room", back_populates="group", cascade="all, delete-orphan")
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    name = Column(String, nullable=False)
+    color = Column(String, nullable=False)  # HEX 색상 예: #FF5733
+
+    group = relationship("Group", back_populates="roles")
+    users = relationship("User", secondary=user_roles, back_populates="roles")
+
+class Room(Base):
+    __tablename__ = "rooms"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    host_id = Column(String, ForeignKey("users.id"), nullable=False)
+    game_name = Column(String, nullable=False)
+    target_count = Column(Integer, nullable=False)
+    target_role = Column(String, nullable=True)
+    unit_type = Column(Enum(UnitType), default=UnitType.INDIVIDUAL)
+    status = Column(Enum(RoomStatus), default=RoomStatus.RECRUITING)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    group = relationship("Group", back_populates="rooms")
+    host = relationship("User", foreign_keys=[host_id])
+    participants = relationship("User", secondary=room_participants)
