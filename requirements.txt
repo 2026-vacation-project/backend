@@ -1,0 +1,16 @@
+# Core Framework & Server
+fastapi==0.141.1
+uvicorn==0.52.1
+watchfiles==1.2.0
+websockets==17.0.1
+python-dotenv==1.2.2
+
+# Database & ORM
+SQLAlchemy==2.0.51
+
+# Data Validation & Settings
+pydantic==2.13.4
+
+# Testing & HTTP Client
+pytest==9.1.1
+httpx==0.28.1
