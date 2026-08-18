@@ -1,25 +1,14 @@
-import sys
-import os
-
-# Add backend directory to python path for seamless imports
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import models, database
 from routers import auth, users, groups, roles, rooms
 
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Team Matcher API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(auth.router)
 app.include_router(users.router)
