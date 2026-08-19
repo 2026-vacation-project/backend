@@ -1,22 +1,28 @@
+import os
 import time
 import jwt
 import httpx
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
 
-SECRET_KEY = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 7
+# .env 파일 로드 (backend 루트 및 상위 경로 탐색)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# OAuth Client 정보 (발급받은 실제 값으로 대체)
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"
-GOOGLE_CLIENT_SECRET = "YOUR_GOOGLE_CLIENT_SECRET"
-GOOGLE_REDIRECT_URI = "http://localhost:3000/auth/callback/google"
+SECRET_KEY = os.getenv("SECRET_KEY", "YOUR_SUPER_SECRET_KEY_CHANGE_THIS")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "7"))
 
-DISCORD_CLIENT_ID = "YOUR_DISCORD_CLIENT_ID"
-DISCORD_CLIENT_SECRET = "YOUR_DISCORD_CLIENT_SECRET"
-DISCORD_REDIRECT_URI = "http://localhost:3000/auth/callback/discord"
+# OAuth Client 정보
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/auth/callback/google")
+
+DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
+DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:3000/auth/callback/discord")
 
 security = HTTPBearer()
 
@@ -64,6 +70,11 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
 async def fetch_oauth_user_info(provider: str, code: str) -> dict:
     async with httpx.AsyncClient() as client:
         if provider.lower() == "google":
+            if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Google OAuth 설정(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)이 .env 파일에 구성되지 않았습니다."
+                )
             token_res = await client.post(
                 "https://oauth2.googleapis.com/token",
                 data={
@@ -75,17 +86,25 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
                 },
             )
             if token_res.status_code != 200:
-                raise HTTPException(status_code=400, detail="Google OAuth 인증 실패")
+                error_detail = token_res.text
+                raise HTTPException(status_code=400, detail=f"Google OAuth 인증 실패: {error_detail}")
             
             access_token = token_res.json().get("access_token")
             user_res = await client.get(
                 "https://www.googleapis.com/oauth2/v2/userinfo",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
+            if user_res.status_code != 200:
+                raise HTTPException(status_code=400, detail="Google 유저 정보 조회 실패")
             info = user_res.json()
             return {"email": info["email"], "name": info.get("name", "User"), "profile_image": info.get("picture")}
 
         elif provider.lower() == "discord":
+            if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Discord OAuth 설정(DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET)이 .env 파일에 구성되지 않았습니다."
+                )
             token_res = await client.post(
                 "https://discord.com/api/v10/oauth2/token",
                 data={
@@ -98,13 +117,16 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             if token_res.status_code != 200:
-                raise HTTPException(status_code=400, detail="Discord OAuth 인증 실패")
+                error_detail = token_res.text
+                raise HTTPException(status_code=400, detail=f"Discord OAuth 인증 실패: {error_detail}")
             
             access_token = token_res.json().get("access_token")
             user_res = await client.get(
                 "https://discord.com/api/v10/users/@me",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
+            if user_res.status_code != 200:
+                raise HTTPException(status_code=400, detail="Discord 유저 정보 조회 실패")
             info = user_res.json()
             avatar_url = f"https://cdn.discordapp.com/avatars/{info['id']}/{info['avatar']}.png" if info.get("avatar") else None
             return {"email": info["email"], "name": info.get("username"), "profile_image": avatar_url}

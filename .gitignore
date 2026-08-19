@@ -1,11 +1,24 @@
+# Environment variables
+.env
+.env.local
+*.env
+
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-app.db
-*.sqlite3
-.venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
 env/
 venv/
+.venv/
+
+# SQLite DB
+*.db
+*.sqlite3
+
+# IDE & OS
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
