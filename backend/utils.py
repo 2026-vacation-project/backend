@@ -1,5 +1,6 @@
 import os
 import time
+from threading import Lock
 import jwt
 import httpx
 from datetime import datetime, timedelta
@@ -31,15 +32,17 @@ class SnowflakeGenerator:
         self.machine_id = machine_id
         self.sequence = 0
         self.last_timestamp = -1
+        self._lock = Lock()
 
     def generate_id(self) -> int:
-        timestamp = int(time.time() * 1000)
-        if timestamp == self.last_timestamp:
-            self.sequence = (self.sequence + 1) & 4095
-        else:
-            self.sequence = 0
-        self.last_timestamp = timestamp
-        return ((timestamp - 1609459200000) << 22) | (self.machine_id << 12) | self.sequence
+        with self._lock:
+            timestamp = int(time.time() * 1000)
+            if timestamp == self.last_timestamp:
+                self.sequence = (self.sequence + 1) & 4095
+            else:
+                self.sequence = 0
+            self.last_timestamp = timestamp
+            return ((timestamp - 1609459200000) << 22) | (self.machine_id << 12) | self.sequence
 
 snowflake = SnowflakeGenerator()
 

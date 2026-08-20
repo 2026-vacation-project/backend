@@ -1,8 +1,13 @@
 import enum
+from datetime import datetime, timezone
+
 from sqlalchemy import Column, String, BigInteger, Integer, ForeignKey, DateTime, Enum, JSON, Table
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from database import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class UnitType(str, enum.Enum):
     INDIVIDUAL = "명"
@@ -39,7 +44,7 @@ class User(Base):
     name = Column(String, nullable=False)
     profile_image = Column(String, nullable=True)
     fcm_token = Column(String, nullable=True)
-    preferred_games = Column(JSON, default=[])
+    preferred_games = Column(JSON, default=list)
 
     groups = relationship("Group", secondary=group_members, back_populates="members")
     roles = relationship("Role", secondary=user_roles, back_populates="users")
@@ -49,7 +54,7 @@ class Group(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     members = relationship("User", secondary=group_members, back_populates="groups")
     roles = relationship("Role", back_populates="group", cascade="all, delete-orphan")
@@ -77,7 +82,7 @@ class Room(Base):
     target_role = Column(String, nullable=True)
     unit_type = Column(Enum(UnitType), default=UnitType.INDIVIDUAL)
     status = Column(Enum(RoomStatus), default=RoomStatus.RECRUITING)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     group = relationship("Group", back_populates="rooms")
     participants = relationship("User", secondary=room_participants)

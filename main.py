@@ -4,13 +4,14 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backen
 
 from fastapi import FastAPI
 import models, database
-from routers import auth, users, groups, roles, rooms
+from routers import auth, games, users, groups, roles, rooms
 
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Team Matcher API")
 
 app.include_router(auth.router)
+app.include_router(games.router)
 app.include_router(users.router)
 app.include_router(groups.router)
 app.include_router(roles.router)
