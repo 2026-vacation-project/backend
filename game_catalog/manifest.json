@@ -1,0 +1,50 @@
+{
+  "format_version": 1,
+  "generated_at": "2026-08-22T16:58:27.462130+00:00",
+  "database": {
+    "filename": "game_catalog.db",
+    "size_bytes": 768622592,
+    "sha256": "952ed4f918abae20883927055eb3767bf821c36882f28632269485f667797b55",
+    "tables": {
+      "companies": 63541,
+      "game_companies": 279822,
+      "game_external_ids": 226454,
+      "game_genres": 625204,
+      "game_images": 2264690,
+      "game_names": 800066,
+      "game_platforms": 522210,
+      "games": 373235,
+      "genres": 23,
+      "platforms": 218,
+      "sync_states": 1
+    }
+  },
+  "archive": {
+    "compression": "gzip",
+    "size_bytes": 184175027,
+    "sha256": "1b4032bb316e3d5d0b9c04ef68805f7e59aeb4d7a933aeed3cc97c22d7a3c030",
+    "chunk_size_bytes": 47185920
+  },
+  "parts": [
+    {
+      "path": "parts/game_catalog.db.gz.part-000",
+      "size_bytes": 47185920,
+      "sha256": "5c2b00e5ca850ce066f8d5faa39eec4ee79af03cbbe1761e4c41a5ca7e3f8822"
+    },
+    {
+      "path": "parts/game_catalog.db.gz.part-001",
+      "size_bytes": 47185920,
+      "sha256": "4e2eb3c5ac1ddf79ff044a52affdc4807cf74b2e27f9829a9ee84608b220bfa7"
+    },
+    {
+      "path": "parts/game_catalog.db.gz.part-002",
+      "size_bytes": 47185920,
+      "sha256": "fb44d9c3c5cc1c09aa070b501f330df1c652c5ceeb093c76ffbb825f9490794e"
+    },
+    {
+      "path": "parts/game_catalog.db.gz.part-003",
+      "size_bytes": 42617267,
+      "sha256": "5b50d7b4c5815ddcb8084db87b15dc1bed25ef6306d6e2ddda76e78d53742145"
+    }
+  ]
+}
