@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 from typing import Annotated, Optional, List
 from models import RoomStatus
 
@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    display_name: Optional[str] = None
     profile_image: Optional[str]
     fcm_token: Optional[str]
     preferred_games: List[str]
@@ -77,6 +78,29 @@ class RoleResponse(BaseModel):
     group_id: EntityId
     name: str
     color: str
+    user_ids: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_user_ids(cls, value: object) -> object:
+        if isinstance(value, dict):
+            return value
+        return {
+            "id": getattr(value, "id"),
+            "group_id": getattr(value, "group_id"),
+            "name": getattr(value, "name"),
+            "color": getattr(value, "color"),
+            "user_ids": [user.id for user in getattr(value, "users", [])],
+        }
+
+
+class TagResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: EntityId
+    group_id: EntityId
+    name: str
+    color: str
 
 # Room
 class RoomCreate(BaseModel):
@@ -84,6 +108,7 @@ class RoomCreate(BaseModel):
 
     game_name: str = Field(min_length=1, max_length=60)
     target_count: int = Field(ge=2, le=100)
+    tag_ids: List[EntityId] = Field(default_factory=list, max_length=20)
 
 class RoomUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -91,6 +116,7 @@ class RoomUpdate(BaseModel):
     game_name: Optional[str] = Field(default=None, min_length=1, max_length=60)
     target_count: Optional[int] = Field(default=None, ge=2, le=100)
     status: Optional[RoomStatus] = None
+    tag_ids: Optional[List[EntityId]] = Field(default=None, max_length=20)
 
 class RoomResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -104,3 +130,4 @@ class RoomResponse(BaseModel):
     status: RoomStatus
     created_at: Optional[datetime] = None
     participants: List[UserResponse] = Field(default_factory=list)
+    tags: List[TagResponse] = Field(default_factory=list)

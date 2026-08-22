@@ -40,6 +40,12 @@ user_roles = Table(
     Column('role_id', BigInteger, ForeignKey('roles.id'), primary_key=True)
 )
 
+room_tags = Table(
+    'room_tags', Base.metadata,
+    Column('room_id', BigInteger, ForeignKey('rooms.id', ondelete='CASCADE'), primary_key=True),
+    Column('role_id', BigInteger, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True)
+)
+
 room_participants = Table(
     'room_participants', Base.metadata,
     Column('room_id', BigInteger, ForeignKey('rooms.id'), primary_key=True),
@@ -52,6 +58,7 @@ class User(Base):
     id = Column(String, primary_key=True)
     email = Column(String, nullable=False)
     name = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
     profile_image = Column(String, nullable=True)
     fcm_token = Column(String, nullable=True)
     preferred_games = Column(JSON, default=list)
@@ -99,6 +106,7 @@ class Role(Base):
 
     group = relationship("Group", back_populates="roles")
     users = relationship("User", secondary=user_roles, back_populates="roles")
+    rooms = relationship("Room", secondary=room_tags, back_populates="tags")
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -113,3 +121,4 @@ class Room(Base):
 
     group = relationship("Group", back_populates="rooms")
     participants = relationship("User", secondary=room_participants)
+    tags = relationship("Role", secondary=room_tags, back_populates="rooms")

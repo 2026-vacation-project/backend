@@ -10,6 +10,7 @@ def test_same_email_creates_separate_google_and_discord_users(monkeypatch, sessi
         return {
             "email": "shared@example.com",
             "name": "Discord user",
+            "display_name": "Discord display name",
             "profile_image": None,
         }
 
@@ -38,6 +39,7 @@ def test_same_email_creates_separate_google_and_discord_users(monkeypatch, sessi
 
     assert [user.id for user in users] == ["D-200", "G-100"]
     assert response["user"].id == "D-200"
+    assert response["user"].display_name == "Discord display name"
 
 
 def test_login_reuses_only_the_user_from_the_same_provider(monkeypatch, session_factory) -> None:
@@ -45,6 +47,7 @@ def test_login_reuses_only_the_user_from_the_same_provider(monkeypatch, session_
         return {
             "email": "shared@example.com",
             "name": "Updated Discord user",
+            "display_name": "Updated display name",
             "profile_image": None,
         }
 
@@ -77,3 +80,4 @@ def test_login_reuses_only_the_user_from_the_same_provider(monkeypatch, session_
     assert len(users) == 2
     assert response["user"].id == "D-200"
     assert response["user"].name == "Updated Discord user"
+    assert response["user"].display_name == "Updated display name"

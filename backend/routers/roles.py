@@ -37,7 +37,13 @@ def list_roles(
     db: Session = Depends(database.get_db),
 ):
     _get_group_or_404(group_id, db)
-    return db.query(models.Role).filter(models.Role.group_id == group_id).order_by(models.Role.id).all()
+    return (
+        db.query(models.Role)
+        .options(selectinload(models.Role.users))
+        .filter(models.Role.group_id == group_id)
+        .order_by(models.Role.id)
+        .all()
+    )
 
 
 @router.post("", response_model=schemas.RoleResponse)
@@ -91,7 +97,7 @@ def delete_role(
     db.commit()
     return {"message": "태그가 삭제되었습니다."}
 
-@router.post("/{role_id}/assign/{target_user_id}")
+@router.post("/{role_id}/assign/{target_user_id}", response_model=schemas.RoleResponse)
 def assign_role(
     group_id: int,
     role_id: int,
@@ -111,4 +117,29 @@ def assign_role(
     if role not in user.roles:
         user.roles.append(role)
         db.commit()
-    return {"message": "멤버에게 태그를 붙였습니다."}
+    db.refresh(role)
+    return role
+
+
+@router.delete("/{role_id}/assign/{target_user_id}", response_model=schemas.RoleResponse)
+def unassign_role(
+    group_id: int,
+    role_id: int,
+    target_user_id: str,
+    current_user_id: str = Depends(utils.get_current_user_id),
+    db: Session = Depends(database.get_db),
+):
+    group = _get_group_or_404(group_id, db)
+    _require_group_member(group, current_user_id)
+    role = _get_role_or_404(group_id, role_id, db)
+    user = db.query(models.User).filter(models.User.id == target_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    if not any(member.id == target_user_id for member in group.members):
+        raise HTTPException(status_code=400, detail="그룹 멤버의 태그만 뗄 수 있습니다.")
+
+    if role in user.roles:
+        user.roles.remove(role)
+        db.commit()
+    db.refresh(role)
+    return role

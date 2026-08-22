@@ -29,7 +29,7 @@ def _get_room_or_404(
 ) -> models.Room:
     query = (
         db.query(models.Room)
-        .options(selectinload(models.Room.participants))
+        .options(selectinload(models.Room.participants), selectinload(models.Room.tags))
         .filter(models.Room.id == room_id, models.Room.group_id == group_id)
     )
     if for_update:
@@ -64,6 +64,24 @@ def _attach_game_covers(rooms: list[models.Room], db: Session) -> list[models.Ro
     return rooms
 
 
+def _get_room_tags(group_id: int, tag_ids: list[str], db: Session) -> list[models.Role]:
+    try:
+        normalized_ids = list(dict.fromkeys(int(tag_id) for tag_id in tag_ids))
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="태그 정보를 확인해 주세요.") from error
+    if not normalized_ids:
+        return []
+    tags = (
+        db.query(models.Role)
+        .filter(models.Role.group_id == group_id, models.Role.id.in_(normalized_ids))
+        .order_by(models.Role.id)
+        .all()
+    )
+    if len(tags) != len(normalized_ids):
+        raise HTTPException(status_code=400, detail="이 그룹에 없는 태그가 포함되어 있습니다.")
+    return tags
+
+
 @router.get("", response_model=list[schemas.RoomResponse])
 def list_rooms(
     group_id: int,
@@ -72,7 +90,7 @@ def list_rooms(
 ):
     rooms = (
         db.query(models.Room)
-        .options(selectinload(models.Room.participants))
+        .options(selectinload(models.Room.participants), selectinload(models.Room.tags))
         .filter(models.Room.group_id == group_id)
         .order_by(models.Room.created_at.desc(), models.Room.id.desc())
         .all()
@@ -113,13 +131,14 @@ def create_room(
         target_count=room_in.target_count,
     )
     room.participants.append(host)
+    room.tags = _get_room_tags(group_id, room_in.tag_ids, db)
     db.add(room)
     db.commit()
     db.refresh(room)
 
     installation_ids = [u.fcm_token for u in group.members if u.fcm_token and u.id != current_user_id]
     title = "새 모집이 시작됐어요"
-    body = f"{host.name}님이 <{room.game_name}>을 함께할 사람을 찾고 있어요"
+    body = f"{host.display_name or host.name}님이 <{room.game_name}>을 함께할 사람을 찾고 있어요"
     link = f"{utils.FRONTEND_BASE_URL}/rooms/{room.id}?group={group_id}"
     background_tasks.add_task(utils.send_fcm_notification, installation_ids, title, body, link)
 
@@ -138,10 +157,13 @@ def update_room(
         raise HTTPException(status_code=403, detail="방장만 모집방을 수정할 수 있습니다.")
 
     update_data = room_update.model_dump(exclude_unset=True)
+    tag_ids = update_data.pop("tag_ids", None)
     if "game_name" in update_data and update_data["game_name"] is not None:
         update_data["game_name"] = update_data["game_name"].strip()
     for key, value in update_data.items():
         setattr(room, key, value)
+    if tag_ids is not None:
+        room.tags = _get_room_tags(group_id, tag_ids, db)
 
     if "status" not in update_data and room.status != models.RoomStatus.CANCELLED:
         room.status = (
@@ -189,6 +211,8 @@ def join_room(
         raise HTTPException(status_code=400, detail="현재 참가할 수 없는 방입니다.")
     if len(room.participants) >= room.target_count:
         raise HTTPException(status_code=400, detail="모집 인원이 이미 가득 찼습니다.")
+    if room.tags and not {tag.id for tag in room.tags}.intersection(role.id for role in user.roles):
+        raise HTTPException(status_code=400, detail="이 모집방에서 찾는 태그가 내게 없습니다.")
 
     room.participants.append(user)
     

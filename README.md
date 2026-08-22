@@ -126,7 +126,7 @@ PYTHONPATH=backend python -m jobs.sync_games rebuild-index
 | `POST` | `/api/v1/groups/{group_id}/leave` | 그룹 탈퇴 |
 | `GET`, `POST` | `/api/v1/groups/{group_id}/roles` | 태그 목록·생성 |
 | `PATCH`, `DELETE` | `/api/v1/groups/{group_id}/roles/{role_id}` | 태그 수정·삭제 |
-| `POST` | `/api/v1/groups/{group_id}/roles/{role_id}/assign/{target_user_id}` | 태그 부여 |
+| `POST`, `DELETE` | `/api/v1/groups/{group_id}/roles/{role_id}/assign/{target_user_id}` | 태그 부여·해제 |
 | `GET`, `POST` | `/api/v1/groups/{group_id}/rooms` | 모집방 목록·생성 |
 | `GET`, `PATCH`, `DELETE` | `/api/v1/groups/{group_id}/rooms/{room_id}` | 모집방 상세·수정·삭제 |
 | `POST` | `/api/v1/groups/{group_id}/rooms/{room_id}/join` | 모집방 참가 |

@@ -138,6 +138,7 @@ def leave_group(
     if not any(member.id == current_user_id for member in group.members):
         raise HTTPException(status_code=400, detail="참여하지 않은 그룹입니다.")
 
+    user.roles = [role for role in user.roles if role.group_id != group_id]
     group.members.remove(user)
     db.commit()
     return {"message": "그룹에서 나왔습니다."}

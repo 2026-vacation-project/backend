@@ -34,6 +34,7 @@ async def login_or_register(provider: str, req: schemas.OAuthLoginRequest, db: S
             id=custom_id,
             email=user_info["email"],
             name=user_info["name"],
+            display_name=user_info.get("display_name") or user_info["name"],
             profile_image=user_info["profile_image"]
         )
         db.add(user)
@@ -41,6 +42,7 @@ async def login_or_register(provider: str, req: schemas.OAuthLoginRequest, db: S
         db.refresh(user)
     else:
         user.name = user_info["name"]
+        user.display_name = user_info.get("display_name") or user_info["name"]
         user.profile_image = user_info["profile_image"]
         db.commit()
 

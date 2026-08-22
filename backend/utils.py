@@ -128,7 +128,13 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
             if user_res.status_code != 200:
                 raise HTTPException(status_code=400, detail="Google 유저 정보 조회 실패")
             info = user_res.json()
-            return {"email": info["email"], "name": info.get("name", "User"), "profile_image": info.get("picture")}
+            display_name = info.get("name") or "User"
+            return {
+                "email": info["email"],
+                "name": display_name,
+                "display_name": display_name,
+                "profile_image": info.get("picture"),
+            }
 
         elif provider.lower() == "discord":
             if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
@@ -160,7 +166,13 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
                 raise HTTPException(status_code=400, detail="Discord 유저 정보 조회 실패")
             info = user_res.json()
             avatar_url = f"https://cdn.discordapp.com/avatars/{info['id']}/{info['avatar']}.png" if info.get("avatar") else None
-            return {"email": info["email"], "name": info.get("username"), "profile_image": avatar_url}
+            username = info.get("username") or info.get("global_name") or "User"
+            return {
+                "email": info["email"],
+                "name": username,
+                "display_name": info.get("global_name") or username,
+                "profile_image": avatar_url,
+            }
 
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 로그인 제공자입니다.")
