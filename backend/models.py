@@ -1,13 +1,25 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, BigInteger, Integer, ForeignKey, DateTime, Enum, JSON, Table
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+)
 from sqlalchemy.orm import relationship
 from database import Base
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
 
 class UnitType(str, enum.Enum):
     INDIVIDUAL = "명"
@@ -17,6 +29,7 @@ class RoomStatus(str, enum.Enum):
     RECRUITING = "RECRUITING"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+
 
 group_members = Table(
     'group_members', Base.metadata,
@@ -54,6 +67,7 @@ class Group(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
+    is_public = Column(Boolean, nullable=False, default=True, server_default="1")
     created_at = Column(DateTime, default=utc_now)
 
     members = relationship("User", secondary=group_members, back_populates="groups")
@@ -79,7 +93,6 @@ class Room(Base):
     host_id = Column(String, ForeignKey("users.id"), nullable=False)
     game_name = Column(String, nullable=False)
     target_count = Column(Integer, nullable=False)
-    target_role = Column(String, nullable=True)
     unit_type = Column(Enum(UnitType), default=UnitType.INDIVIDUAL)
     status = Column(Enum(RoomStatus), default=RoomStatus.RECRUITING)
     created_at = Column(DateTime, default=utc_now)

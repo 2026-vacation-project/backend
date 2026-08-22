@@ -1,12 +1,15 @@
-import sys, os
+import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
 from fastapi import FastAPI
-import models, database
+
+from games import models as game_models  # noqa: F401
+import models
 from routers import auth, games, users, groups, roles, rooms
 
-models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Team Matcher API")
 
@@ -16,6 +19,7 @@ app.include_router(users.router)
 app.include_router(groups.router)
 app.include_router(roles.router)
 app.include_router(rooms.router)
+
 
 @app.get("/")
 def root():

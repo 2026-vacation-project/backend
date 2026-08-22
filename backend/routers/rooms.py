@@ -53,7 +53,6 @@ def list_rooms(
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db),
 ):
-    _get_group_or_404(group_id, db)
     return (
         db.query(models.Room)
         .options(selectinload(models.Room.participants))
@@ -93,7 +92,6 @@ def create_room(
         host_id=current_user_id,
         game_name=room_in.game_name.strip(),
         target_count=room_in.target_count,
-        target_role=room_in.target_role.strip() if room_in.target_role else None,
         unit_type=room_in.unit_type,
     )
     room.participants.append(host)
@@ -123,8 +121,6 @@ def update_room(
     update_data = room_update.model_dump(exclude_unset=True)
     if "game_name" in update_data and update_data["game_name"] is not None:
         update_data["game_name"] = update_data["game_name"].strip()
-    if "target_role" in update_data and update_data["target_role"] is not None:
-        update_data["target_role"] = update_data["target_role"].strip() or None
     for key, value in update_data.items():
         setattr(room, key, value)
 

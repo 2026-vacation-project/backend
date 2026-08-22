@@ -43,6 +43,10 @@ def list_groups(
     return (
         db.query(models.Group)
         .options(selectinload(models.Group.members))
+        .filter(
+            models.Group.is_public.is_(True)
+            | models.Group.members.any(models.User.id == current_user_id)
+        )
         .order_by(models.Group.created_at.desc(), models.Group.id.desc())
         .all()
     )
@@ -64,12 +68,32 @@ def create_group(
     db: Session = Depends(database.get_db),
 ):
     user = _get_current_user_or_404(current_user_id, db)
-    group = models.Group(id=utils.snowflake.generate_id(), name=group_in.name.strip())
+    group = models.Group(
+        id=utils.snowflake.generate_id(),
+        name=group_in.name.strip(),
+        is_public=group_in.is_public,
+    )
     group.members.append(user)
     db.add(group)
     db.commit()
     db.refresh(group)
     return group
+
+
+@router.patch("/{group_id}/visibility", response_model=schemas.GroupResponse)
+def update_group_visibility(
+    group_id: int,
+    visibility_in: schemas.GroupVisibilityUpdate,
+    current_user_id: str = Depends(utils.get_current_user_id),
+    db: Session = Depends(database.get_db),
+):
+    group = _get_group_or_404(group_id, db)
+    _require_group_member(group, current_user_id)
+    group.is_public = visibility_in.is_public
+    db.commit()
+    db.refresh(group)
+    return group
+
 
 @router.delete("/{group_id}")
 def delete_group(

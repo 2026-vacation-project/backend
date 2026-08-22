@@ -4,10 +4,25 @@ Sunrin vacation project 2nd team. Room maker for people
 ## 실행
 
 ```bash
+alembic upgrade head
 python -m uvicorn main:app --reload
 ```
 
-## 게임 검색 API
+`.env`의 `DATABASE_URL`에는 PostgreSQL 연결 주소를 설정합니다.
+
+```env
+DATABASE_URL=postgresql+psycopg://teammoa:teammoa@localhost:5432/teammoa
+```
+
+기존 데이터베이스에 Alembic을 처음 연결할 때만 기존 스키마를 기준점으로 표시한 뒤 게임
+카탈로그 마이그레이션을 적용합니다.
+
+```bash
+alembic stamp 20260822_00
+alembic upgrade head
+```
+
+## 로컬 게임 검색 API
 
 ```http
 GET /api/v1/games/search?query=Minecraft&limit=10
@@ -15,10 +30,47 @@ Authorization: Bearer <access_token>
 ```
 
 - `query`: 검색할 게임 이름 (1~100자, 필수)
-- `limit`: 최대 결과 수 (1~20, 기본값 10)
+- `limit`: 최대 결과 수 (1~50, 기본값 20)
 - 응답 필드: `id`, `name`, `slug`, `cover_url`, `first_release_date`, `rating`, `platforms`
 
-IGDB 인증에는 `.env`의 `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`을 사용합니다.
+검색 요청은 로컬 데이터베이스만 조회합니다. 응답의 `id`는 기존 프론트엔드와의 호환을 위해
+내부 PK가 아니라 IGDB ID를 유지합니다. PostgreSQL에서는 `pg_trgm`과 게임명 GIN 인덱스를
+사용하며, 같은 게임의 기본 이름·한국어 이름·대체 이름이 여러 개 일치해도 게임은 한 번만
+반환됩니다.
+
+## IGDB 동기화
+
+IGDB는 아래 오프라인 작업에서만 호출합니다. API 서버의 검색 요청에서는 사용하지 않습니다.
+인증에는 `.env`의 `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`을 사용합니다.
+
+```bash
+# 이전 체크포인트부터 이어서 동기화
+PYTHONPATH=backend python -m jobs.sync_games sync
+
+# 처음부터 다시 upsert
+PYTHONPATH=backend python -m jobs.sync_games sync --full
+
+# 지정한 IGDB ID 다음부터 시작
+PYTHONPATH=backend python -m jobs.sync_games sync --after-id 100000
+
+# 특정 게임만 동기화 (소량 샘플 확인에도 사용)
+PYTHONPATH=backend python -m jobs.sync_games sync --game-id 119133
+
+# 배치 크기 지정 (1~500)
+PYTHONPATH=backend python -m jobs.sync_games sync --batch-size 250
+
+# PostgreSQL 검색 인덱스 재생성
+PYTHONPATH=backend python -m jobs.sync_games rebuild-index
+```
+
+동기화는 최대 500개 단위로 insert/upsert하고 배치마다 `sync_states`에 마지막 IGDB ID를
+저장합니다. IGDB 클라이언트는 하나의 `httpx.AsyncClient`를 재사용하며 동시 요청 수, 초당
+요청 수, timeout, 429 및 5xx 재시도를 제한합니다.
+
+작업이 중간에 실패하면 `--full`을 빼고 같은 명령을 다시 실행하면 마지막으로 커밋된 ID부터
+자동으로 이어집니다. 로그에 표시된 ID를 직접 지정하려면 `--after-id <마지막 ID>`를 사용합니다.
+전체 목록은 offset을 계속 늘리지 않고 `id > 마지막 ID`와 `sort id asc`를 사용하는 안정적인
+커서 방식으로 가져옵니다.
 
 ## 프론트엔드 API
 
@@ -32,8 +84,9 @@ IGDB 인증에는 `.env`의 `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`을 사용
 | `GET` | `/api/v1/users/{user_id}` | 사용자 상세 |
 | `PATCH` | `/api/v1/users/{user_id}/fcm-token` | FCM 토큰 수정 |
 | `PATCH` | `/api/v1/users/{user_id}/preferences` | 선호 게임 수정 |
-| `GET`, `POST` | `/api/v1/groups` | 그룹 목록·생성 |
+| `GET`, `POST` | `/api/v1/groups` | 공개 그룹·참여 중인 그룹 목록, 그룹 생성 |
 | `GET`, `DELETE` | `/api/v1/groups/{group_id}` | 그룹 상세·삭제 |
+| `PATCH` | `/api/v1/groups/{group_id}/visibility` | 그룹 공개 범위 변경 |
 | `POST` | `/api/v1/groups/{group_id}/join` | 그룹 참여 |
 | `POST` | `/api/v1/groups/{group_id}/leave` | 그룹 탈퇴 |
 | `GET`, `POST` | `/api/v1/groups/{group_id}/roles` | 역할 목록·생성 |
@@ -47,5 +100,5 @@ IGDB 인증에는 `.env`의 `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`을 사용
 ## 테스트
 
 ```bash
-python -m unittest discover -s tests -v
+PYTHONPATH=backend pytest -q
 ```
