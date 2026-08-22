@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 import models, schemas, database, utils
 
-router = APIRouter(prefix="/api/v1/groups/{group_id}/roles", tags=["Roles"])
+router = APIRouter(prefix="/api/v1/groups/{group_id}/roles", tags=["Tags"])
 
 
 def _get_group_or_404(group_id: int, db: Session) -> models.Group:
@@ -26,7 +26,7 @@ def _require_group_member(group: models.Group, current_user_id: str) -> None:
 def _get_role_or_404(group_id: int, role_id: int, db: Session) -> models.Role:
     role = db.query(models.Role).filter(models.Role.id == role_id, models.Role.group_id == group_id).first()
     if not role:
-        raise HTTPException(status_code=404, detail="역할을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="태그를 찾을 수 없습니다.")
     return role
 
 
@@ -89,7 +89,7 @@ def delete_role(
     role = _get_role_or_404(group_id, role_id, db)
     db.delete(role)
     db.commit()
-    return {"message": "역할이 삭제되었습니다."}
+    return {"message": "태그가 삭제되었습니다."}
 
 @router.post("/{role_id}/assign/{target_user_id}")
 def assign_role(
@@ -106,9 +106,9 @@ def assign_role(
     if not user:
         raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
     if not any(member.id == target_user_id for member in group.members):
-        raise HTTPException(status_code=400, detail="그룹 멤버에게만 역할을 부여할 수 있습니다.")
+        raise HTTPException(status_code=400, detail="그룹 멤버에게만 태그를 붙일 수 있습니다.")
 
     if role not in user.roles:
         user.roles.append(role)
         db.commit()
-    return {"message": "유저에게 역할이 부여되었습니다."}
+    return {"message": "멤버에게 태그를 붙였습니다."}

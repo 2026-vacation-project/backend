@@ -1,12 +1,21 @@
 import os
+import json
+import logging
 import time
 from threading import Lock
+from urllib.parse import urlparse
+import firebase_admin
 import jwt
 import httpx
-from datetime import datetime, timedelta
+from firebase_admin import credentials, messaging
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
+import database
+import models
 
 # .env 파일 로드 (backend 루트 및 상위 경로 탐색)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +33,12 @@ GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000/au
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:3000/auth/callback/discord")
+
+FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+
+logger = logging.getLogger(__name__)
+_firebase_app_lock = Lock()
 
 security = HTTPBearer()
 
@@ -53,17 +68,30 @@ def generate_custom_id(provider: str) -> str:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(database.get_db),
+) -> str:
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다.")
+        token_version = payload.get("ver", 0)
+        if not isinstance(token_version, int):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다.")
+
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user or user.auth_version != token_version:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="다시 로그인해 주세요.",
+            )
         return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰이 만료되었습니다.")
@@ -137,7 +165,61 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
         else:
             raise HTTPException(status_code=400, detail="지원하지 않는 로그인 제공자입니다.")
 
-def send_fcm_notification(tokens: list[str], title: str, body: str):
-    if not tokens:
-        return
-    print(f"\n[FCM 알림 발송 완료] 수신: {len(tokens)}명 | {title}: {body}\n")
+def _get_firebase_app():
+    try:
+        return firebase_admin.get_app()
+    except ValueError:
+        pass
+
+    with _firebase_app_lock:
+        try:
+            return firebase_admin.get_app()
+        except ValueError:
+            credential = None
+            if FIREBASE_SERVICE_ACCOUNT_JSON:
+                credential = credentials.Certificate(json.loads(FIREBASE_SERVICE_ACCOUNT_JSON))
+            return firebase_admin.initialize_app(credential)
+
+
+def send_fcm_notification(
+    installation_ids: list[str],
+    title: str,
+    body: str,
+    link: str | None = None,
+) -> int:
+    targets = list(dict.fromkeys(target.strip() for target in installation_ids if target.strip()))
+    if not targets:
+        return 0
+
+    try:
+        app = _get_firebase_app()
+        success_count = 0
+        notification_link = link if link and urlparse(link).scheme == "https" else None
+        for offset in range(0, len(targets), 500):
+            batch = targets[offset : offset + 500]
+            webpush = messaging.WebpushConfig(
+                notification=messaging.WebpushNotification(
+                    title=title,
+                    body=body,
+                    icon="/favicon.png",
+                ),
+                fcm_options=messaging.WebpushFCMOptions(link=notification_link) if notification_link else None,
+            )
+            message = messaging.MulticastMessage(
+                fids=batch,
+                notification=messaging.Notification(title=title, body=body),
+                data={"url": link} if link else None,
+                webpush=webpush,
+            )
+            response = messaging.send_each_for_multicast(message, app=app)
+            success_count += response.success_count
+
+            for target, send_response in zip(batch, response.responses, strict=True):
+                if not send_response.success:
+                    logger.warning("FCM 알림 전송 실패: target=%s error=%s", target, send_response.exception)
+
+        logger.info("FCM 알림 전송 완료: success=%d total=%d", success_count, len(targets))
+        return success_count
+    except Exception:
+        logger.exception("FCM 알림을 전송하지 못했습니다.")
+        return 0

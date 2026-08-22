@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
@@ -20,10 +21,6 @@ from database import Base
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-
-class UnitType(str, enum.Enum):
-    INDIVIDUAL = "명"
-    TEAM = "팀"
 
 class RoomStatus(str, enum.Enum):
     RECRUITING = "RECRUITING"
@@ -53,11 +50,29 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True)
-    email = Column(String, unique=True, nullable=False)
+    email = Column(String, nullable=False)
     name = Column(String, nullable=False)
     profile_image = Column(String, nullable=True)
     fcm_token = Column(String, nullable=True)
     preferred_games = Column(JSON, default=list)
+    auth_version = Column(Integer, nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        Index(
+            "uq_users_google_email",
+            "email",
+            unique=True,
+            postgresql_where=id.like("G-%"),
+            sqlite_where=id.like("G-%"),
+        ),
+        Index(
+            "uq_users_discord_email",
+            "email",
+            unique=True,
+            postgresql_where=id.like("D-%"),
+            sqlite_where=id.like("D-%"),
+        ),
+    )
 
     groups = relationship("Group", secondary=group_members, back_populates="members")
     roles = relationship("Role", secondary=user_roles, back_populates="users")
@@ -93,7 +108,6 @@ class Room(Base):
     host_id = Column(String, ForeignKey("users.id"), nullable=False)
     game_name = Column(String, nullable=False)
     target_count = Column(Integer, nullable=False)
-    unit_type = Column(Enum(UnitType), default=UnitType.INDIVIDUAL)
     status = Column(Enum(RoomStatus), default=RoomStatus.RECRUITING)
     created_at = Column(DateTime, default=utc_now)
 

@@ -1,7 +1,8 @@
 from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from games.models import Game, GameCompany, GameImage, GameName
+from games.models import Game, GameCompany, GameImage, GameImageType, GameName
+from games.normalization import normalize_game_name
 
 
 def search_games(db: Session, query: str, normalized_query: str, limit: int) -> list[Game]:
@@ -77,3 +78,29 @@ def get_game_names(db: Session, game_id: int) -> list[GameName]:
 def get_cover_url(game: Game) -> str | None:
     cover = next((image for image in game.images if image.type.value == "COVER"), None)
     return cover.url if cover else None
+
+
+def get_cover_urls_by_name(db: Session, names: list[str]) -> dict[str, str]:
+    normalized_by_name = {name: normalize_game_name(name) for name in names}
+    normalized_names = {name for name in normalized_by_name.values() if name}
+    if not normalized_names:
+        return {}
+
+    statement = (
+        select(GameName.normalized_name, GameImage.url)
+        .join(GameImage, GameImage.game_id == GameName.game_id)
+        .where(
+            GameName.normalized_name.in_(normalized_names),
+            GameImage.type == GameImageType.COVER,
+        )
+        .order_by(GameName.normalized_name, GameName.game_id, GameImage.id)
+    )
+    cover_by_normalized_name: dict[str, str] = {}
+    for normalized_name, cover_url in db.execute(statement):
+        cover_by_normalized_name.setdefault(normalized_name, cover_url)
+
+    return {
+        name: cover_by_normalized_name[normalized_name]
+        for name, normalized_name in normalized_by_name.items()
+        if normalized_name in cover_by_normalized_name
+    }

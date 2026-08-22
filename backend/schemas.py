@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from typing import Annotated, Optional, List
-from models import UnitType, RoomStatus
+from models import RoomStatus
 
 
 def stringify_id(value: object) -> str:
@@ -29,6 +29,12 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class LogoutAllResponse(BaseModel):
+    message: str
+    left_room_count: int
+    deleted_room_count: int
 
 class FCMTokenUpdate(BaseModel):
     fcm_token: str
@@ -78,14 +84,12 @@ class RoomCreate(BaseModel):
 
     game_name: str = Field(min_length=1, max_length=60)
     target_count: int = Field(ge=2, le=100)
-    unit_type: UnitType = UnitType.INDIVIDUAL
 
 class RoomUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     game_name: Optional[str] = Field(default=None, min_length=1, max_length=60)
     target_count: Optional[int] = Field(default=None, ge=2, le=100)
-    unit_type: Optional[UnitType] = None
     status: Optional[RoomStatus] = None
 
 class RoomResponse(BaseModel):
@@ -95,8 +99,8 @@ class RoomResponse(BaseModel):
     group_id: EntityId
     host_id: str
     game_name: str
+    game_cover_url: Optional[str] = None
     target_count: int
-    unit_type: UnitType
     status: RoomStatus
     created_at: Optional[datetime] = None
     participants: List[UserResponse] = Field(default_factory=list)

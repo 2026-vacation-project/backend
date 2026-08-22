@@ -1,6 +1,21 @@
 # RoomMaker
 Sunrin vacation project 2nd team. Room maker for people
 
+## 기술 스택 - Backend
+
+| 분류 | 기술 |
+| --- | --- |
+| 언어 | Python 3.12 |
+| API 서버 | FastAPI, Uvicorn |
+| 데이터베이스 | PostgreSQL, SQLAlchemy 2, psycopg 3 |
+| DB 마이그레이션 | Alembic |
+| 데이터 검증 | Pydantic 2 |
+| 인증 | Google·Discord OAuth 2.0, JWT (PyJWT) |
+| 외부 연동 | IGDB·Twitch API (HTTPX), Firebase Admin·FCM |
+| 테스트 | pytest |
+
+운영 DB는 PostgreSQL을 사용하며, `DATABASE_URL`이 없는 로컬 환경에서는 SQLite로 실행할 수 있습니다.
+
 ## 실행
 
 ```bash
@@ -13,6 +28,25 @@ python -m uvicorn main:app --reload
 ```env
 DATABASE_URL=postgresql+psycopg://teammoa:teammoa@localhost:5432/teammoa
 ```
+
+## Firebase 알림 설정
+
+Firebase Console에서 서비스 계정 JSON 키를 발급하고, `.env`에 다음 중 한 가지 방식으로
+인증 정보를 설정합니다.
+
+```env
+# 권장: 서비스 계정 JSON 파일의 절대 경로
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/firebase-service-account.json
+
+# 파일을 사용할 수 없는 배포 환경에서만 JSON 전체 문자열 사용
+FIREBASE_SERVICE_ACCOUNT_JSON=
+
+# 알림을 눌렀을 때 열 프론트엔드 주소
+FRONTEND_BASE_URL=https://teammoa.example
+```
+
+서비스 계정 JSON은 저장소에 커밋하지 않습니다. 모집방이 생성되면 해당 그룹 멤버에게,
+모집 인원이 모두 모이면 모집방 참가자 전원에게 Firebase Cloud Messaging 알림을 보냅니다.
 
 기존 데이터베이스에 Alembic을 처음 연결할 때만 기존 스키마를 기준점으로 표시한 뒤 게임
 카탈로그 마이그레이션을 적용합니다.
@@ -75,11 +109,12 @@ PYTHONPATH=backend python -m jobs.sync_games rebuild-index
 ## 프론트엔드 API
 
 아래 경로는 로그인 응답을 제외하고 JWT `Authorization: Bearer <access_token>` 헤더가 필요합니다.
-그룹·역할·모집방 ID는 JavaScript 정밀도 손실을 방지하기 위해 JSON 문자열로 반환합니다.
+그룹·태그·모집방 ID는 JavaScript 정밀도 손실을 방지하기 위해 JSON 문자열로 반환합니다.
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/login/{provider}` | OAuth 로그인 |
+| `POST` | `/api/v1/auth/logout-all` | 모든 기기 로그아웃·모집방 참가 취소 |
 | `GET` | `/api/v1/users` | 사용자 목록 |
 | `GET` | `/api/v1/users/{user_id}` | 사용자 상세 |
 | `PATCH` | `/api/v1/users/{user_id}/fcm-token` | FCM 토큰 수정 |
@@ -89,9 +124,9 @@ PYTHONPATH=backend python -m jobs.sync_games rebuild-index
 | `PATCH` | `/api/v1/groups/{group_id}/visibility` | 그룹 공개 범위 변경 |
 | `POST` | `/api/v1/groups/{group_id}/join` | 그룹 참여 |
 | `POST` | `/api/v1/groups/{group_id}/leave` | 그룹 탈퇴 |
-| `GET`, `POST` | `/api/v1/groups/{group_id}/roles` | 역할 목록·생성 |
-| `PATCH`, `DELETE` | `/api/v1/groups/{group_id}/roles/{role_id}` | 역할 수정·삭제 |
-| `POST` | `/api/v1/groups/{group_id}/roles/{role_id}/assign/{target_user_id}` | 역할 부여 |
+| `GET`, `POST` | `/api/v1/groups/{group_id}/roles` | 태그 목록·생성 |
+| `PATCH`, `DELETE` | `/api/v1/groups/{group_id}/roles/{role_id}` | 태그 수정·삭제 |
+| `POST` | `/api/v1/groups/{group_id}/roles/{role_id}/assign/{target_user_id}` | 태그 부여 |
 | `GET`, `POST` | `/api/v1/groups/{group_id}/rooms` | 모집방 목록·생성 |
 | `GET`, `PATCH`, `DELETE` | `/api/v1/groups/{group_id}/rooms/{room_id}` | 모집방 상세·수정·삭제 |
 | `POST` | `/api/v1/groups/{group_id}/rooms/{room_id}/join` | 모집방 참가 |

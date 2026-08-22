@@ -43,7 +43,17 @@ def update_user_fcm_token(
 ):
     _require_same_user(user_id, current_user_id)
     user = _get_user_or_404(user_id, db)
-    user.fcm_token = data.fcm_token
+    installation_id = data.fcm_token.strip() or None
+    if installation_id:
+        (
+            db.query(models.User)
+            .filter(
+                models.User.id != user_id,
+                models.User.fcm_token == installation_id,
+            )
+            .update({models.User.fcm_token: None}, synchronize_session=False)
+        )
+    user.fcm_token = installation_id
     db.commit()
     return {"message": "FCM 토큰이 저장되었습니다."}
 
