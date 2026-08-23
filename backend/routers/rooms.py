@@ -105,6 +105,9 @@ def get_room(
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db),
 ):
+    group = _get_group_or_404(group_id, db)
+    if not any(member.id == current_user_id for member in group.members):
+        raise HTTPException(status_code=403, detail="그룹에 참여해야 모집방 정보를 볼 수 있습니다.")
     room = _get_room_or_404(group_id, room_id, db)
     return _attach_game_covers([room], db)[0]
 
