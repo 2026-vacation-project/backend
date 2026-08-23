@@ -82,6 +82,12 @@ def _get_room_tags(group_id: int, tag_ids: list[str], db: Session) -> list[model
     return tags
 
 
+def _normalize_room_name(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.strip() or None
+
+
 @router.get("", response_model=list[schemas.RoomResponse])
 def list_rooms(
     group_id: int,
@@ -130,6 +136,7 @@ def create_room(
         id=utils.snowflake.generate_id(),
         group_id=group_id,
         host_id=current_user_id,
+        name=_normalize_room_name(room_in.name),
         game_name=room_in.game_name.strip(),
         target_count=room_in.target_count,
     )
@@ -161,6 +168,8 @@ def update_room(
 
     update_data = room_update.model_dump(exclude_unset=True)
     tag_ids = update_data.pop("tag_ids", None)
+    if "name" in update_data:
+        update_data["name"] = _normalize_room_name(update_data["name"])
     if "game_name" in update_data and update_data["game_name"] is not None:
         update_data["game_name"] = update_data["game_name"].strip()
     for key, value in update_data.items():

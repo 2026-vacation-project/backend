@@ -17,3 +17,11 @@ def test_room_api_exposes_recruiting_tags() -> None:
     assert "tag_ids" in schemas["RoomUpdate"]["properties"]
     assert "tags" in schemas["RoomResponse"]["properties"]
     assert "user_ids" in schemas["RoleResponse"]["properties"]
+
+
+def test_room_api_exposes_an_optional_room_name() -> None:
+    schemas = app.openapi()["components"]["schemas"]
+
+    for schema_name in ("RoomCreate", "RoomUpdate", "RoomResponse"):
+        assert "name" in schemas[schema_name]["properties"]
+    assert "name" not in schemas["RoomCreate"].get("required", [])

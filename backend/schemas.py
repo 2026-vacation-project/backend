@@ -106,6 +106,7 @@ class TagResponse(BaseModel):
 class RoomCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    name: Optional[str] = Field(default=None, max_length=60)
     game_name: str = Field(min_length=1, max_length=60)
     target_count: int = Field(ge=2, le=100)
     tag_ids: List[EntityId] = Field(default_factory=list, max_length=20)
@@ -113,6 +114,7 @@ class RoomCreate(BaseModel):
 class RoomUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    name: Optional[str] = Field(default=None, max_length=60)
     game_name: Optional[str] = Field(default=None, min_length=1, max_length=60)
     target_count: Optional[int] = Field(default=None, ge=2, le=100)
     status: Optional[RoomStatus] = None
@@ -124,6 +126,7 @@ class RoomResponse(BaseModel):
     id: EntityId
     group_id: EntityId
     host_id: str
+    name: Optional[str] = None
     game_name: str
     game_cover_url: Optional[str] = None
     target_count: int

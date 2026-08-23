@@ -114,6 +114,7 @@ class Room(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     group_id = Column(BigInteger, ForeignKey("groups.id"), nullable=False)
     host_id = Column(String, ForeignKey("users.id"), nullable=False)
+    name = Column(String(60), nullable=True)
     game_name = Column(String, nullable=False)
     target_count = Column(Integer, nullable=False)
     status = Column(Enum(RoomStatus), default=RoomStatus.RECRUITING)
