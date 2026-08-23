@@ -5,7 +5,7 @@ from fastapi import BackgroundTasks
 import models
 import schemas
 import utils
-import discord_notifications
+import realtime
 from routers.rooms import _queue_notifications, join_room
 from routers.users import update_user_fcm_token
 
@@ -16,7 +16,6 @@ def _user(user_id: str, name: str, installation_id: str | None) -> models.User:
         email=f"{user_id}@example.com",
         name=name,
         fcm_token=installation_id,
-        notifications_enabled=True,
         preferred_games=[],
     )
 
@@ -108,12 +107,14 @@ def test_completed_room_notifies_every_participant(session_factory, monkeypatch)
         db.refresh(room)
 
     assert room.status == models.RoomStatus.COMPLETED
-    assert len(background_tasks.tasks) == 1
-    task = background_tasks.tasks[0]
+    assert len(background_tasks.tasks) == 2
+    task, realtime_task = background_tasks.tasks
     assert task.func is utils.send_fcm_notification
     assert task.args[0] == ["fid-host", "fid-guest"]
     assert task.args[1] == "모집이 완료됐어요"
     assert task.args[3] == "https://teammoa.example/rooms/10?group=1"
+    assert realtime_task.func is realtime.broadcast_room_change
+    assert realtime_task.args == (1, 10, "participants")
 
 
 def test_installation_id_moves_to_the_current_user(session_factory) -> None:
@@ -135,27 +136,20 @@ def test_installation_id_moves_to_the_current_user(session_factory) -> None:
         assert db.get(models.User, current_user.id).fcm_token == "shared-fid"
 
 
-def test_notification_routing_prefers_fcm_and_uses_discord_only_without_fcm() -> None:
+def test_notification_routing_uses_fcm_only() -> None:
     fcm_user = _user("fcm", "FCM 사용자", "fid-fcm")
-    fcm_user.discord_user_id = "discord-fcm"
-    discord_user = _user("discord", "Discord 사용자", None)
-    discord_user.discord_user_id = "discord-only"
-    disabled_user = _user("disabled", "꺼진 사용자", None)
-    disabled_user.discord_user_id = "discord-disabled"
-    disabled_user.notifications_enabled = False
+    no_fcm_user = _user("no-fcm", "FCM 미설정 사용자", None)
     background_tasks = BackgroundTasks()
 
     _queue_notifications(
         background_tasks,
-        [fcm_user, discord_user, disabled_user],
+        [fcm_user, no_fcm_user],
         "새 모집",
         "모집 내용",
         "https://teammoa.example/rooms/10?group=1",
     )
 
-    assert len(background_tasks.tasks) == 2
-    fcm_task, discord_task = background_tasks.tasks
+    assert len(background_tasks.tasks) == 1
+    fcm_task = background_tasks.tasks[0]
     assert fcm_task.func is utils.send_fcm_notification
     assert fcm_task.args[0] == ["fid-fcm"]
-    assert discord_task.func is discord_notifications.send_discord_notifications
-    assert discord_task.args[0] == ["discord-only"]

@@ -1,5 +1,5 @@
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 import models
@@ -37,6 +37,7 @@ def test_last_participant_leaving_deletes_room(session_factory) -> None:
         response = leave_room(
             group_id=group.id,
             room_id=room.id,
+            background_tasks=BackgroundTasks(),
             current_user_id=user.id,
             db=db,
         )
@@ -76,7 +77,8 @@ def test_logout_all_leaves_rooms_deletes_empty_rooms_and_revokes_tokens(session_
         db.commit()
 
         old_token = utils.create_access_token({"sub": user.id, "ver": user.auth_version})
-        response = logout_all(current_user_id=user.id, db=db)
+        background_tasks = BackgroundTasks()
+        response = logout_all(background_tasks=background_tasks, current_user_id=user.id, db=db)
         db.expire_all()
 
         assert response["left_room_count"] == 2
@@ -93,6 +95,7 @@ def test_logout_all_leaves_rooms_deletes_empty_rooms_and_revokes_tokens(session_
         assert logged_out_user is not None
         assert logged_out_user.auth_version == 1
         assert logged_out_user.fcm_token is None
+        assert len(background_tasks.tasks) == 3
 
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=old_token)
         with pytest.raises(HTTPException) as exc_info:

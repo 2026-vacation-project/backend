@@ -72,11 +72,7 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(database.get_db),
-) -> str:
-    token = credentials.credentials
+def resolve_access_token(token: str, db: Session) -> str:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -97,6 +93,13 @@ def get_current_user_id(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰이 만료되었습니다.")
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 인증에 실패했습니다.")
+
+
+def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(database.get_db),
+) -> str:
+    return resolve_access_token(credentials.credentials, db)
 
 async def fetch_oauth_user_info(provider: str, code: str) -> dict:
     async with httpx.AsyncClient() as client:

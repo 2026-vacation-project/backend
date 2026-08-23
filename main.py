@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from games import models as game_models  # noqa: F401
 import models
-from routers import auth, games, users, groups, roles, rooms
+from routers import auth, games, users, groups, roles, rooms, realtime
 
 
 app = FastAPI(title="Team Matcher API")
@@ -19,6 +19,7 @@ app.include_router(users.router)
 app.include_router(groups.router)
 app.include_router(roles.router)
 app.include_router(rooms.router)
+app.include_router(realtime.router)
 
 
 @app.get("/")

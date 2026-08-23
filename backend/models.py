@@ -61,10 +61,7 @@ class User(Base):
     display_name = Column(String, nullable=True)
     profile_image = Column(String, nullable=True)
     fcm_token = Column(String, nullable=True)
-    notifications_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
     discord_user_id = Column(String, nullable=True, unique=True)
-    discord_notification_channel_id = Column(String, nullable=True)
-    discord_notification_message_id = Column(String, nullable=True)
     preferred_games = Column(JSON, default=list)
     auth_version = Column(Integer, nullable=False, default=0, server_default="0")
 
@@ -87,10 +84,6 @@ class User(Base):
 
     groups = relationship("Group", secondary=group_members, back_populates="members")
     roles = relationship("Role", secondary=user_roles, back_populates="users")
-
-    @property
-    def discord_connected(self) -> bool:
-        return bool(self.discord_user_id)
 
 class Group(Base):
     __tablename__ = "groups"

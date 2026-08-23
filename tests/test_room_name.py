@@ -52,6 +52,7 @@ def test_room_name_is_optional_and_trimmed(session_factory) -> None:
             group_id=group.id,
             room_id=named_room.id,
             room_update=schemas.RoomUpdate(name=""),
+            background_tasks=BackgroundTasks(),
             current_user_id=host.id,
             db=db,
         )

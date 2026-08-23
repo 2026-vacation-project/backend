@@ -21,8 +21,6 @@ class UserResponse(BaseModel):
     display_name: Optional[str] = None
     profile_image: Optional[str]
     fcm_token: Optional[str]
-    notifications_enabled: bool
-    discord_connected: bool
     preferred_games: List[str]
 
 class OAuthLoginRequest(BaseModel):
@@ -41,9 +39,6 @@ class LogoutAllResponse(BaseModel):
 
 class FCMTokenUpdate(BaseModel):
     fcm_token: str
-
-class NotificationPreferenceUpdate(BaseModel):
-    enabled: bool
 
 class PreferencesUpdate(BaseModel):
     preferred_games: List[str]

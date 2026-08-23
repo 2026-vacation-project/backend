@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
-import database, discord_notifications, models, schemas, utils
+import database, models, realtime, schemas, utils
 from games import repository as game_repository
 from room_lifecycle import remove_room_participant
 
@@ -95,23 +95,9 @@ def _queue_notifications(
     body: str,
     link: str,
 ) -> None:
-    enabled_recipients = [user for user in recipients if user.notifications_enabled]
-    installation_ids = [user.fcm_token for user in enabled_recipients if user.fcm_token]
-    discord_user_ids = [
-        user.discord_user_id
-        for user in enabled_recipients
-        if not user.fcm_token and user.discord_user_id
-    ]
+    installation_ids = [user.fcm_token for user in recipients if user.fcm_token]
     if installation_ids:
         background_tasks.add_task(utils.send_fcm_notification, installation_ids, title, body, link)
-    if discord_user_ids:
-        background_tasks.add_task(
-            discord_notifications.send_discord_notifications,
-            discord_user_ids,
-            title,
-            body,
-            link,
-        )
 
 
 @router.get("", response_model=list[schemas.RoomResponse])
@@ -182,6 +168,7 @@ def create_room(
         body,
         link,
     )
+    background_tasks.add_task(realtime.broadcast_room_change, group_id, room.id, "created")
 
     return _attach_game_covers([room], db)[0]
 
@@ -190,6 +177,7 @@ def update_room(
     group_id: int,
     room_id: int,
     room_update: schemas.RoomUpdate,
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db)
 ):
@@ -217,12 +205,14 @@ def update_room(
 
     db.commit()
     db.refresh(room)
+    background_tasks.add_task(realtime.broadcast_room_change, group_id, room.id, "updated")
     return _attach_game_covers([room], db)[0]
 
 @router.delete("/{room_id}")
 def delete_room(
     group_id: int, 
     room_id: int, 
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db)
 ):
@@ -231,6 +221,7 @@ def delete_room(
         raise HTTPException(status_code=403, detail="방장만 모집방을 삭제할 수 있습니다.")
     db.delete(room)
     db.commit()
+    background_tasks.add_task(realtime.broadcast_room_change, group_id, room_id, "deleted")
     return {"message": "방이 삭제되었습니다."}
 
 @router.post("/{room_id}/join")
@@ -267,6 +258,7 @@ def join_room(
         _queue_notifications(background_tasks, list(room.participants), title, body, link)
 
     db.commit()
+    background_tasks.add_task(realtime.broadcast_room_change, group_id, room.id, "participants")
     return {"message": "방에 성공적으로 참가했습니다."}
 
 
@@ -274,6 +266,7 @@ def join_room(
 def leave_room(
     group_id: int,
     room_id: int,
+    background_tasks: BackgroundTasks,
     user_id: str | None = None,
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db),
@@ -288,6 +281,12 @@ def leave_room(
     room_deleted = remove_room_participant(db, room, user)
 
     db.commit()
+    background_tasks.add_task(
+        realtime.broadcast_room_change,
+        group_id,
+        room_id,
+        "deleted" if room_deleted else "participants",
+    )
     if room_deleted:
         return {"message": "방 참가를 취소했고, 빈 모집방을 삭제했습니다."}
     return {"message": "방 참가를 취소했습니다."}

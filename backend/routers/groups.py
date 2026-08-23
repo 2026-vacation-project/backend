@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
-import models, schemas, database, utils
+import models, realtime, schemas, database, utils
 
 router = APIRouter(prefix="/api/v1/groups", tags=["Groups"])
 
@@ -98,6 +98,7 @@ def update_group_visibility(
 @router.delete("/{group_id}")
 def delete_group(
     group_id: int,
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(utils.get_current_user_id),
     db: Session = Depends(database.get_db),
 ):
@@ -105,6 +106,7 @@ def delete_group(
     _require_group_member(group, current_user_id)
     db.delete(group)
     db.commit()
+    background_tasks.add_task(realtime.broadcast_room_change, group_id, None, "group_deleted")
     return {"message": "그룹이 삭제되었습니다."}
 
 @router.post("/{group_id}/join")
