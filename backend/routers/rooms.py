@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
-import models, schemas, database, utils
+import database, discord_notifications, models, schemas, utils
 from games import repository as game_repository
 from room_lifecycle import remove_room_participant
 
@@ -88,6 +88,32 @@ def _normalize_room_name(value: str | None) -> str | None:
     return value.strip() or None
 
 
+def _queue_notifications(
+    background_tasks: BackgroundTasks,
+    recipients: list[models.User],
+    title: str,
+    body: str,
+    link: str,
+) -> None:
+    enabled_recipients = [user for user in recipients if user.notifications_enabled]
+    installation_ids = [user.fcm_token for user in enabled_recipients if user.fcm_token]
+    discord_user_ids = [
+        user.discord_user_id
+        for user in enabled_recipients
+        if not user.fcm_token and user.discord_user_id
+    ]
+    if installation_ids:
+        background_tasks.add_task(utils.send_fcm_notification, installation_ids, title, body, link)
+    if discord_user_ids:
+        background_tasks.add_task(
+            discord_notifications.send_discord_notifications,
+            discord_user_ids,
+            title,
+            body,
+            link,
+        )
+
+
 @router.get("", response_model=list[schemas.RoomResponse])
 def list_rooms(
     group_id: int,
@@ -146,11 +172,16 @@ def create_room(
     db.commit()
     db.refresh(room)
 
-    installation_ids = [u.fcm_token for u in group.members if u.fcm_token and u.id != current_user_id]
     title = "새 모집이 시작됐어요"
     body = f"{host.display_name or host.name}님이 <{room.game_name}>을 함께할 사람을 찾고 있어요"
     link = f"{utils.FRONTEND_BASE_URL}/rooms/{room.id}?group={group_id}"
-    background_tasks.add_task(utils.send_fcm_notification, installation_ids, title, body, link)
+    _queue_notifications(
+        background_tasks,
+        [user for user in group.members if user.id != current_user_id],
+        title,
+        body,
+        link,
+    )
 
     return _attach_game_covers([room], db)[0]
 
@@ -230,11 +261,10 @@ def join_room(
     
     if len(room.participants) >= room.target_count:
         room.status = models.RoomStatus.COMPLETED
-        installation_ids = [participant.fcm_token for participant in room.participants if participant.fcm_token]
         title = "모집이 완료됐어요"
         body = f"<{room.game_name}> 모집 인원이 모두 모였어요"
         link = f"{utils.FRONTEND_BASE_URL}/rooms/{room.id}?group={group_id}"
-        background_tasks.add_task(utils.send_fcm_notification, installation_ids, title, body, link)
+        _queue_notifications(background_tasks, list(room.participants), title, body, link)
 
     db.commit()
     return {"message": "방에 성공적으로 참가했습니다."}

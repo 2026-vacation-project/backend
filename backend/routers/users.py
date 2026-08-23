@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
-import models, schemas, database, utils
+import database, discord_notifications, models, schemas, utils
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
@@ -56,6 +56,24 @@ def update_user_fcm_token(
     user.fcm_token = installation_id
     db.commit()
     return {"message": "FCM 토큰이 저장되었습니다."}
+
+
+@router.patch("/{user_id}/notification-preference", response_model=schemas.UserResponse)
+def update_notification_preference(
+    user_id: str,
+    data: schemas.NotificationPreferenceUpdate,
+    background_tasks: BackgroundTasks,
+    current_user_id: str = Depends(utils.get_current_user_id),
+    db: Session = Depends(database.get_db),
+):
+    _require_same_user(user_id, current_user_id)
+    user = _get_user_or_404(user_id, db)
+    user.notifications_enabled = data.enabled
+    db.commit()
+    db.refresh(user)
+    if user.discord_user_id:
+        background_tasks.add_task(discord_notifications.sync_settings_message, user.id)
+    return user
 
 
 @router.patch("/{user_id}/preferences")

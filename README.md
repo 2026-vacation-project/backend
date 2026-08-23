@@ -11,7 +11,7 @@ Sunrin vacation project 2nd team. Room maker for people
 | DB 마이그레이션 | Alembic |
 | 데이터 검증 | Pydantic 2 |
 | 인증 | Google·Discord OAuth 2.0, JWT (PyJWT) |
-| 외부 연동 | IGDB·Twitch API (HTTPX), Firebase Admin·FCM |
+| 외부 연동 | IGDB·Twitch API (HTTPX), Firebase Admin·FCM, Discord Gateway Bot |
 | 테스트 | pytest |
 
 운영 DB는 PostgreSQL을 사용하며, `DATABASE_URL`이 없는 로컬 환경에서는 SQLite로 실행할 수 있습니다.
@@ -47,6 +47,26 @@ FRONTEND_BASE_URL=https://teammoa.example
 
 서비스 계정 JSON은 저장소에 커밋하지 않습니다. 모집방이 생성되면 해당 그룹 멤버에게,
 모집 인원이 모두 모이면 모집방 참가자 전원에게 Firebase Cloud Messaging 알림을 보냅니다.
+
+## Discord Gateway 알림 설정
+
+Discord Developer Portal에서 OAuth와 Bot을 같은 애플리케이션에 설정하고 Bot Token을 `.env`에
+추가합니다. Interaction Endpoint URL과 Public Key는 사용하지 않습니다.
+
+```env
+DISCORD_BOT_TOKEN=your_discord_bot_token
+```
+
+API 서버와 별도로 Gateway Bot 프로세스를 실행합니다.
+
+```bash
+python discord_gateway.py
+```
+
+사용자가 Discord를 연결하면 Bot이 알림 설정 Embed DM을 전송합니다. 버튼 Interaction은
+Gateway로 수신하며, 버튼 데이터가 아닌 Interaction을 실행한 Discord 사용자 ID로 연결 계정을
+조회합니다. FCM 토큰이 있으면 FCM으로만 보내고, FCM 토큰이 없을 때만 Discord Embed DM을
+사용합니다. 한 채널의 전송 실패를 다른 채널 fallback 조건으로 사용하지 않습니다.
 
 기존 데이터베이스에 Alembic을 처음 연결할 때만 기존 스키마를 기준점으로 표시한 뒤 게임
 카탈로그 마이그레이션을 적용합니다.
@@ -114,10 +134,12 @@ PYTHONPATH=backend python -m jobs.sync_games rebuild-index
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/login/{provider}` | OAuth 로그인 |
+| `POST`, `DELETE` | `/api/v1/auth/discord/link` | Discord 계정 연결·해제 |
 | `POST` | `/api/v1/auth/logout-all` | 모든 기기 로그아웃·모집방 참가 취소 |
 | `GET` | `/api/v1/users` | 사용자 목록 |
 | `GET` | `/api/v1/users/{user_id}` | 사용자 상세 |
 | `PATCH` | `/api/v1/users/{user_id}/fcm-token` | FCM 토큰 수정 |
+| `PATCH` | `/api/v1/users/{user_id}/notification-preference` | 웹·Discord 공통 알림 상태 수정 |
 | `PATCH` | `/api/v1/users/{user_id}/preferences` | 선호 게임 수정 |
 | `GET`, `POST` | `/api/v1/groups` | 공개 그룹·참여 중인 그룹 목록, 그룹 생성 |
 | `GET`, `DELETE` | `/api/v1/groups/{group_id}` | 그룹 상세·삭제 |

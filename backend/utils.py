@@ -172,6 +172,7 @@ async def fetch_oauth_user_info(provider: str, code: str) -> dict:
                 "name": username,
                 "display_name": info.get("global_name") or username,
                 "profile_image": avatar_url,
+                "provider_user_id": str(info["id"]),
             }
 
         else:
